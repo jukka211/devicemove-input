@@ -22,20 +22,27 @@
     <script>
       // === CONFIG ===
       let words         = ['if','no'];
-      let baseFontSize  = 114;
+      let baseFontSize  = 164;
       let maxScale      = 5;    // letter grows up to this
       let minScale      = 0.7;  // others shrink down to this
       let smoothing     = 0.1;
 
-      // Flatten letters into array with row info
+      // Flatten letters into array with row/col info
       let letters = [];
       words.forEach((w, row) => {
-        for (let c of w) {
-          letters.push({ char: c, row, baseScale: 1, targetScale: 1 });
+        for (let col = 0; col < w.length; col++) {
+          letters.push({
+            char: w[col],
+            row: row,
+            col: col,
+            baseScale: 1,
+            targetScale: 1
+          });
         }
       });
+      let cols = words[0].length; // assumes all words same length
 
-      // Motion / permission logic (unchanged)
+      // — Motion / Permission Logic —
       let permissionGranted = false;
       const deadZone        = 1,
             smoothingFactor = 0.15,
@@ -55,9 +62,7 @@
               else              console.warn('Motion permission denied');
             })
             .catch(console.error);
-        } else {
-          enableMotion();
-        }
+        } else enableMotion();
       }
 
       function enableMotion() {
@@ -76,11 +81,11 @@
         lastUpdate = now;
         lastTiltLR = tilt;
 
-        // map |tilt| to [1..maxScale]
         let t = constrain(abs(tilt) / maxTilt, 0, 1);
         let raw = 1 + t * (maxScale - 1);
         lastScale += smoothingFactor * (raw - lastScale);
       }
+      // ——————————————————————
 
       function setup() {
         createCanvas(windowWidth, windowHeight);
@@ -94,17 +99,15 @@
       function draw() {
         background(255);
 
-        // 1) decide which letter index to “hover” based on tilt sign and magnitude
-        let total = letters.length; // 4
-        let idx = floor(map(lastTiltLR, -maxTilt, maxTilt, 0, total));
-        idx = constrain(idx, 0, total - 1);
+        // pick which column to “hover” based on tilt sign
+        // tilt<0 → col 0, tilt>0 → col last
+        let colIdx = lastTiltLR < 0 ? 0 : cols - 1;
 
-        // 2) set targetScale on each letter
-        letters.forEach((L, i) => {
-          if (i === idx) {
+        // set targetScale
+        letters.forEach(L => {
+          if (L.col === colIdx) {
             L.targetScale = lastScale;
           } else {
-            // inverse shrink
             L.targetScale = map(
               lastScale,
               1, maxScale,
@@ -114,25 +117,24 @@
           }
         });
 
-        // 3) lerp current toward target
+        // lerp current toward target
         letters.forEach(L => {
           L.baseScale = lerp(L.baseScale, L.targetScale, smoothing);
         });
 
-        // 4) draw letters in column, centered
+        // draw letters in a centered column
         push();
           translate(width / 2, height / 2);
-          // For each row, compute starting x offset so row is centered
           for (let row = 0; row < words.length; row++) {
-            // collect indices for this row
+            // collect this row’s letters
             let rowLetters = letters.filter(L => L.row === row);
-            // sum widths
+            // compute total row width
             let totalW = rowLetters.reduce((sum, L) =>
               sum + textWidth(L.char) * L.baseScale, 0);
-            // start x so this row is centered
+            // start x so row is centered
             let x = -totalW / 2;
             let y = (row - (words.length - 1)/2) * textLeading();
-            // draw
+            // draw each letter
             rowLetters.forEach(L => {
               push();
                 translate(x, y);
@@ -145,7 +147,7 @@
         pop();
       }
 
-      function windowResized() {
+      function windowResized(){
         resizeCanvas(windowWidth, windowHeight);
       }
     </script>
