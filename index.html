@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>p5 Tilt-Scale Letters in Two Words</title>
+    <title>p5 Tilt-Scale Sentence</title>
     <script src="https://unpkg.com/p5@1.6.0/lib/p5.min.js"></script>
     <script src="https://unpkg.com/p5@1.6.0/lib/addons/p5.dom.min.js"></script>
     <style>
@@ -21,41 +21,37 @@
     <button id="motionBtn">Enable Motion Effects</button>
     <script>
       // === CONFIG ===
-      let words         = ['if','no'];
-      let baseFontSize  = 164;
-      let maxScale      = 5;    // letter grows up to this
-      let minScale      = 0.7;  // others shrink down to this
-      let smoothing     = 0.1;
+      const sentence = 
+        "In the beginning God created the heaven and the earth. " +
+        "And God said, Let there be light: and there was light.";
+      const baseFontSize  = 64;
+      const maxScale      = 5;    // how much one letter can grow
+      const minScale      = 0.7;  // how much the others shrink
+      const smoothing     = 0.1;
 
-      // Flatten letters into array with row/col info
+      // Build array of letter objects
       let letters = [];
-      words.forEach((w, row) => {
-        for (let col = 0; col < w.length; col++) {
-          letters.push({
-            char: w[col],
-            row: row,
-            col: col,
-            baseScale: 1,
-            targetScale: 1
-          });
-        }
-      });
-      let cols = words[0].length; // assumes all words same length
+      for (let c of sentence) {
+        letters.push({ char: c, baseScale: 1, targetScale: 1 });
+      }
+      const total = letters.length;
 
-      // — Motion / Permission Logic —
+      // — Motion / Permission Logic (unchanged) —
       let permissionGranted = false;
       const deadZone        = 1,
             smoothingFactor = 0.15,
             updateInterval  = 50,
-            maxTilt         = 45;  // degrees
+            maxTilt         = 45; // degrees
 
       let lastScale   = 1,
           lastTiltLR  = 0,
           lastUpdate  = 0;
 
       function requestMotionPermission() {
-        if (typeof DeviceOrientationEvent !== 'undefined'
-         && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (
+          typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function'
+        ) {
           DeviceOrientationEvent.requestPermission()
             .then(r => {
               if (r === 'granted') enableMotion();
@@ -73,39 +69,39 @@
 
       function handleOrientation(evt) {
         if (!permissionGranted) return;
-        let tilt = evt.gamma;
-        if (abs(tilt) < deadZone) return;
+        let tilt = evt.gamma;              // left/right tilt
+        if (abs(tilt) < deadZone) return;  // ignore small shakes
 
         let now = Date.now();
         if (now - lastUpdate < updateInterval) return;
         lastUpdate = now;
         lastTiltLR = tilt;
 
+        // map |tilt| to [1..maxScale]
         let t = constrain(abs(tilt) / maxTilt, 0, 1);
         let raw = 1 + t * (maxScale - 1);
         lastScale += smoothingFactor * (raw - lastScale);
       }
-      // ——————————————————————
+      // —————————————————————————
 
       function setup() {
         createCanvas(windowWidth, windowHeight);
         textSize(baseFontSize);
         textAlign(LEFT, BASELINE);
         textStyle(BOLD);
-        textLeading(baseFontSize * 1.2);
         select('#motionBtn').mousePressed(requestMotionPermission);
       }
 
       function draw() {
         background(255);
 
-        // pick which column to “hover” based on tilt sign
-        // tilt<0 → col 0, tilt>0 → col last
-        let colIdx = lastTiltLR < 0 ? 0 : cols - 1;
+        // 1) decide which letter index based on tilt
+        let idx = floor(map(lastTiltLR, -maxTilt, maxTilt, 0, total));
+        idx = constrain(idx, 0, total - 1);
 
-        // set targetScale
-        letters.forEach(L => {
-          if (L.col === colIdx) {
+        // 2) set each letter’s targetScale
+        letters.forEach((L, i) => {
+          if (i === idx) {
             L.targetScale = lastScale;
           } else {
             L.targetScale = map(
@@ -117,37 +113,34 @@
           }
         });
 
-        // lerp current toward target
+        // 3) lerp toward targets
         letters.forEach(L => {
           L.baseScale = lerp(L.baseScale, L.targetScale, smoothing);
         });
 
-        // draw letters in a centered column
+        // 4) draw the sentence, centered
+        //    compute total width at current scales
+        let totalW = letters.reduce(
+          (sum, L) => sum + textWidth(L.char) * L.baseScale, 
+          0
+        );
+        let x = (width - totalW) / 2;
+        let y = height / 2;
+
         push();
-          translate(width / 2, height / 2);
-          for (let row = 0; row < words.length; row++) {
-            // collect this row’s letters
-            let rowLetters = letters.filter(L => L.row === row);
-            // compute total row width
-            let totalW = rowLetters.reduce((sum, L) =>
-              sum + textWidth(L.char) * L.baseScale, 0);
-            // start x so row is centered
-            let x = -totalW / 2;
-            let y = (row - (words.length - 1)/2) * textLeading();
-            // draw each letter
-            rowLetters.forEach(L => {
-              push();
-                translate(x, y);
-                scale(L.baseScale, 1);
-                text(L.char, 0, 0);
-              pop();
-              x += textWidth(L.char) * L.baseScale;
-            });
-          }
+        translate(0, y);
+        letters.forEach(L => {
+          push();
+            translate(x, 0);
+            scale(L.baseScale, 1);
+            text(L.char, 0, 0);
+          pop();
+          x += textWidth(L.char) * L.baseScale;
+        });
         pop();
       }
 
-      function windowResized(){
+      function windowResized() {
         resizeCanvas(windowWidth, windowHeight);
       }
     </script>
